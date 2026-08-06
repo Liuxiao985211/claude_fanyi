@@ -1,0 +1,47 @@
+# Clude翻译App — Python依赖
+# 安装命令: pip install -r requirements.txt
+
+# === 核心依赖（必须安装） ===
+
+# GUI框架（透明窗口、系统托盘）
+PyQt5>=5.15
+
+# 屏幕捕获（D3D11加速截图，可选但推荐）
+dxcam>=0.3.0
+
+# Windows内置OCR（Win10+，零额外依赖）
+winrt-Windows.Media.Ocr
+winrt-Windows.Graphics.Imaging
+winrt-Windows.Globalization
+winrt-Windows.Foundation
+winrt-Windows.Foundation.Collections
+winrt-Windows.Storage.Streams
+
+# 翻译API（免费MyMemory + Google）
+deep-translator>=1.11
+
+# 科学计算（图像处理）
+numpy>=1.24
+
+# SSL证书修复（Windows环境常见问题）
+certifi
+
+# === 可选依赖 ===
+
+# 音频捕获（WASAPI loopback系统音频）
+# sounddevice>=0.4
+
+# 语音识别（STT，用Google免费额度）
+# SpeechRecognition>=3.10
+
+# EasyOCR（离线OCR，需要torch ~2GB）
+# easyocr>=1.7
+
+# Tesseract OCR（需要单独安装Tesseract程序）
+# pytesseract
+
+# DeepL翻译（需要API Key，质量最高）
+# deepl>=1.0
+
+# 本地Whisper语音识别（需要GPU）
+# openai-whisper>=20231117

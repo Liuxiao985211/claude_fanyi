@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 翻译记录（个人数据，不上传）
+翻译记录/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+
+# 打包产物
+*.spec.bak

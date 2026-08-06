@@ -14,6 +14,7 @@
 
 import logging
 import time
+import traceback
 
 from translate.translator import BaseTranslator
 
@@ -73,7 +74,8 @@ class MultiBackend(BaseTranslator):
                 logger.info("翻译后端就绪: MyMemory (免费)")
                 return
         except Exception as e:
-            logger.debug(f"MyMemory不可用: {e}")
+            logger.warning(f"MyMemory不可用: {e}")
+            logger.debug(traceback.format_exc())
 
         # 后端2: Google Translate（免费，某些地区可能被屏蔽）
         try:
@@ -90,7 +92,8 @@ class MultiBackend(BaseTranslator):
                 logger.info("翻译后端就绪: Google Translate (免费)")
                 return
         except Exception as e:
-            logger.debug(f"Google不可用: {e}")
+            logger.warning(f"Google不可用: {e}")
+            logger.debug(traceback.format_exc())
 
         logger.warning("所有免费翻译后端均不可用！")
 

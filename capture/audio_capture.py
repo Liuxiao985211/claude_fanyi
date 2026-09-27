@@ -268,9 +268,13 @@ class AudioCapture:
         返回：
             识别的文本，没有则返回 None
         """
-        # 处理待识别的语音段
-        while self._speech_segments:
-            speech = self._speech_segments.pop(0)
+        # 处理待识别的语音段（pop 也要加锁：
+        # append 发生在音频回调线程，两个线程竞争同一个列表）
+        while True:
+            with self._buffer_lock:
+                if not self._speech_segments:
+                    break
+                speech = self._speech_segments.pop(0)
             text = self._transcribe(speech)
             if text:
                 return text

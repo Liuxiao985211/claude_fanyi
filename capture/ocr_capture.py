@@ -55,6 +55,7 @@ class OCRCapture:
         self._ocr_engine = None      # Windows OCR
         self._initialized = False
         self._backend = None         # 实际使用的后端
+        self._loop = None            # Windows OCR 专用事件循环（复用，不每帧重建）
 
         # 屏幕分辨率
         self._screen_width = 1920
@@ -78,6 +79,10 @@ class OCRCapture:
             return False
 
         self._initialized = True
+        # Windows OCR 后端：创建专用事件循环供识别协程复用
+        if self._backend == "windows":
+            import asyncio
+            self._loop = asyncio.new_event_loop()
         logger.info(f"OCRCapture就绪 (捕获: dxcam, OCR: {self._backend})")
         return True
 
@@ -287,7 +292,6 @@ class OCRCapture:
             from winrt.windows.graphics.imaging import (
                 SoftwareBitmap, BitmapPixelFormat, BitmapAlphaMode
             )
-            import asyncio
 
             h, w = image.shape[:2]
 
@@ -310,12 +314,15 @@ class OCRCapture:
             )
             bitmap.copy_from_buffer(rgba.tobytes())
 
-            # 使用 asyncio 调用异步OCR API
+            # 使用 asyncio 调用异步OCR API。
+            # 复用初始化时创建的事件循环：每帧 asyncio.run() 新建+销毁
+            # 事件循环开销大（每 800ms 一次），且频繁创建易触发
+            # winrt 的 COM 公寓线程问题。
             async def _recognize():
                 result = await self._ocr_engine.recognize_async(bitmap)
                 return result
 
-            result = asyncio.run(_recognize())
+            result = self._loop.run_until_complete(_recognize())
             bitmap.close()
 
             if result and result.lines:
@@ -371,4 +378,7 @@ class OCRCapture:
         self._reader = None
         self._ocr_engine = None
         self._camera = None
+        if self._loop is not None:
+            self._loop.close()
+            self._loop = None
         self._initialized = False

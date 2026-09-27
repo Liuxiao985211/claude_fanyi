@@ -38,7 +38,9 @@ class Deduplicator:
             similarity_threshold: 相似度阈值（0-1），超过此值视为重复
             expiry_seconds: 条目过期时间（秒）
         """
-        self._seen: OrderedDict[str, float] = OrderedDict()
+        # hash → (归一化文本, 时间戳)。归一化文本用于模糊匹配，
+        # 只存 hash 的话 OCR 微差（一个标点/字母）就无法识别为重复。
+        self._seen: OrderedDict[str, tuple] = OrderedDict()
         self._max_history = max_history
         self._similarity_threshold = similarity_threshold
         self._expiry_seconds = expiry_seconds
@@ -66,25 +68,28 @@ class Deduplicator:
 
             # 1. 精确哈希匹配（快速路径）
             if text_hash in self._seen:
-                # 更新时间戳
-                self._seen[text_hash] = now
+                self._seen[text_hash] = (normalized, now)
                 self._seen.move_to_end(text_hash)
                 return True
 
-            # 2. 清理过期条目 & 模糊匹配
+            # 2. 清理过期条目 + 模糊匹配（Levenshtein 相似度，
+            #    处理 OCR 逐帧识别的微小差异：标点、空格、个别字符）
             expired_keys = []
-            for seen_hash, timestamp in self._seen.items():
-                # 检查过期
+            for seen_hash, (seen_text, timestamp) in list(self._seen.items()):
                 if now - timestamp > self._expiry_seconds:
                     expired_keys.append(seen_hash)
                     continue
+                if levenshtein_ratio(normalized, seen_text) >= self._similarity_threshold:
+                    # 视为同一条字幕：更新时间戳，不重复翻译
+                    self._seen[seen_hash] = (seen_text, now)
+                    self._seen.move_to_end(seen_hash)
+                    return True
 
-            # 删除过期条目
             for key in expired_keys:
                 del self._seen[key]
 
             # 3. 添加当前条目
-            self._seen[text_hash] = now
+            self._seen[text_hash] = (normalized, now)
 
             # 4. 限制最大条目数
             while len(self._seen) > self._max_history:
@@ -102,7 +107,7 @@ class Deduplicator:
         with self._lock:
             now = time.time()
             active = sum(
-                1 for t in self._seen.values()
+                1 for _text, t in self._seen.values()
                 if now - t <= self._expiry_seconds
             )
             return {

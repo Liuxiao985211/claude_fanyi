@@ -12,7 +12,6 @@ DEFAULTS = {
     "target_language": "zh-CN",
     "source_language": "auto",
     "translation_mode": "hybrid",       # "ocr" | "audio" | "hybrid"
-    "show_original_text": True,         # 是否显示原文
     "font_size": 16,
     "max_history_lines": 50,
 
@@ -20,7 +19,7 @@ DEFAULTS = {
     "window_x": -1,                     # -1 表示使用默认位置
     "window_y": -1,
     "window_width": 800,
-    "window_height": 200,
+    "window_height": 90,                # 单行译文所需的紧凑高度
     "always_on_top": True,
 
     # OCR
@@ -35,7 +34,9 @@ DEFAULTS = {
     "audio_stt_engine": "google",       # "google" | "whisper" | "vosk"
 
     # 翻译
-    "translation_backend": "google",    # "google" | "deepl"
+    "translation_backend": "llm",      # "llm"（默认，国内可用） | "deepl" | "google"
+    "llm_model": "deepseek-v4-pro",    # LLM 模型名（cnsai/DeepSeek 支持）
+    "llm_base_url": "http://127.0.0.1:8642",  # 本机 cnsai 回退代理
     "deepl_api_key": "",                # 空 = 未配置
 
     # 历史记录
@@ -71,11 +72,25 @@ class AppSettings:
         """
         计算窗口默认位置：屏幕底部居中。
         如果用户之前保存过位置，则使用保存的位置。
+
+        v3 起窗口改为单行紧凑布局：旧版本保存的位置/尺寸作废一次，
+        通过 geometry_version 标记判断（一次性迁移）。
+        迁移时直接把新尺寸写回配置，避免中途强退后旧尺寸残留。
         """
-        x = self.get("window_x", -1)
-        y = self.get("window_y", -1)
-        w = self.get("window_width", 800)
-        h = self.get("window_height", 200)
+        if self.get("geometry_version", 0) < 3:
+            self.set("geometry_version", 3)
+            x = y = -1
+            w = DEFAULTS["window_width"]
+            h = DEFAULTS["window_height"]
+            self.set("window_width", w)
+            self.set("window_height", h)
+            self.set("window_x", -1)
+            self.set("window_y", -1)
+        else:
+            x = self.get("window_x", -1)
+            y = self.get("window_y", -1)
+            w = self.get("window_width", 800)
+            h = self.get("window_height", 90)
 
         if x < 0 or y < 0:
             # 首次运行：放到主屏幕底部居中

@@ -45,10 +45,11 @@ def create_translator(settings: AppSettings) -> BaseTranslator:
     """
     根据配置创建翻译器实例。
 
-    优先使用用户配置的后端，
-    如果指定的后端不可用，自动降级到可用后端。
+    默认使用 LLM 后端（走本机 cnsai 代理，国内可用）；
+    DeepL 配了 Key 且可用时优先 DeepL；
+    Google 免费后端（MyMemory+Google）作为最后兜底。
     """
-    backend = settings.get("translation_backend", "auto")
+    backend = settings.get("translation_backend", "llm")
 
     if backend == "deepl":
         api_key = settings.get("deepl_api_key", "")
@@ -57,8 +58,21 @@ def create_translator(settings: AppSettings) -> BaseTranslator:
             translator = DeepLBackend(api_key)
             if translator.is_available():
                 return translator
+        # DeepL 不可用 → 降级到 LLM
+        backend = "llm"
 
-    # 默认使用多后端（自动选择 MyMemory → Google）
+    if backend == "llm":
+        from translate.llm_backend import LLMBackend
+        translator = LLMBackend(
+            model=settings.get("llm_model", "deepseek-v4-pro"),
+            base_url=settings.get("llm_base_url", "http://127.0.0.1:8642"),
+        )
+        if translator.is_available():
+            return translator
+        # LLM 代理不可用 → 降级到免费多后端
+        backend = "google"
+
+    # 免费多后端（自动选择 MyMemory → Google，国内网络大概率不可用）
     from translate.google_backend import MultiBackend
     return MultiBackend(
         source=settings.get("source_language", "auto"),

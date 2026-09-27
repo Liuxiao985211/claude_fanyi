@@ -1,6 +1,6 @@
-﻿"""
+"""
 系统托盘管理器
-提供任务栏托盘图标、右键菜单（暂停/恢复、设置、退出）。
+提供任务栏托盘图标、右键菜单（开始/暂停/恢复/停止、API设置、退出）。
 """
 
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
@@ -12,11 +12,16 @@ class TrayManager(QObject):
     """
     系统托盘管理器。
     创建托盘图标，提供右键上下文菜单。
+    菜单文字跟随翻译状态机（idle / running / paused）变化。
     """
 
     # 信号
+    start_requested = pyqtSignal()
+    stop_requested = pyqtSignal()
     pause_requested = pyqtSignal()
     resume_requested = pyqtSignal()
+    settings_requested = pyqtSignal()
+    mode_change_requested = pyqtSignal(str)
     exit_requested = pyqtSignal()
     show_window_requested = pyqtSignal()
 
@@ -24,11 +29,11 @@ class TrayManager(QObject):
         super().__init__(parent)
         self._parent_window = parent
         self._tray_icon: QSystemTrayIcon = None
-        self._paused = False
+        self._state = "idle"
 
         # 菜单项引用
         self._pause_action: QAction = None
-        self._show_original_action: QAction = None
+        self._stop_action: QAction = None
         self._mode_action_ocr: QAction = None
         self._mode_action_audio: QAction = None
         self._mode_action_hybrid: QAction = None
@@ -53,7 +58,7 @@ class TrayManager(QObject):
         painter.end()
 
         self._tray_icon.setIcon(QIcon(pixmap))
-        self._tray_icon.setToolTip("Clude翻译App - 运行中")
+        self._tray_icon.setToolTip("Clude翻译App - 待开始")
         self._tray_icon.setVisible(True)
 
         # 创建菜单
@@ -72,17 +77,20 @@ class TrayManager(QObject):
 
         menu.addSeparator()
 
-        # 暂停/恢复
-        self._pause_action = menu.addAction("⏸ 暂停翻译")
+        # 开始/暂停/恢复（文字随状态机变化）
+        self._pause_action = menu.addAction("▶ 开始翻译")
         self._pause_action.triggered.connect(self._on_pause_toggle)
+
+        # 停止（仅在翻译中/已暂停时显示）
+        self._stop_action = menu.addAction("⏹ 停止翻译")
+        self._stop_action.setVisible(False)
+        self._stop_action.triggered.connect(self.stop_requested.emit)
 
         menu.addSeparator()
 
-        # 原文显示切换
-        self._show_original_action = menu.addAction("✅ 显示原文")
-        self._show_original_action.setCheckable(True)
-        self._show_original_action.setChecked(True)
-        self._show_original_action.triggered.connect(self._on_toggle_original)
+        # 翻译API设置
+        settings_action = menu.addAction("⚙ 翻译API设置…")
+        settings_action.triggered.connect(self.settings_requested.emit)
 
         menu.addSeparator()
 
@@ -114,45 +122,46 @@ class TrayManager(QObject):
 
         self._tray_icon.setContextMenu(menu)
 
+    # ==================== 事件处理 ====================
+
     def _on_tray_activated(self, reason):
         """托盘图标激活事件"""
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.show_window_requested.emit()
 
     def _on_pause_toggle(self):
-        """切换暂停/恢复状态"""
-        self._paused = not self._paused
-        if self._paused:
-            self._pause_action.setText("▶ 恢复翻译")
-            self._tray_icon.setToolTip("Clude翻译App - 已暂停")
+        """按当前状态分发：开始 / 暂停 / 恢复"""
+        if self._state == "idle":
+            self.start_requested.emit()
+        elif self._state == "running":
             self.pause_requested.emit()
-        else:
-            self._pause_action.setText("⏸ 暂停翻译")
-            self._tray_icon.setToolTip("Clude翻译App - 运行中")
+        else:  # paused
             self.resume_requested.emit()
-
-    def _on_toggle_original(self, checked):
-        """切换原文显示"""
-        if checked:
-            self._show_original_action.setText("✅ 显示原文")
-        else:
-            self._show_original_action.setText("☐ 隐藏原文")
 
     def _on_mode_change(self, mode: str):
         """切换翻译模式"""
         self._mode_action_ocr.setChecked(mode == "ocr")
         self._mode_action_audio.setChecked(mode == "audio")
         self._mode_action_hybrid.setChecked(mode == "hybrid")
+        self.mode_change_requested.emit(mode)
 
-    def update_pause_state(self, paused: bool):
-        """更新暂停状态（由外部调用）"""
-        self._paused = paused
-        if paused:
-            self._pause_action.setText("▶ 恢复翻译")
-            self._tray_icon.setToolTip("Clude翻译App - 已暂停")
-        else:
+    # ==================== 状态同步 ====================
+
+    def update_state(self, state: str):
+        """同步翻译状态（idle/running/paused），更新菜单文字"""
+        self._state = state
+        if state == "idle":
+            self._pause_action.setText("▶ 开始翻译")
+            self._stop_action.setVisible(False)
+            self._tray_icon.setToolTip("Clude翻译App - 待开始")
+        elif state == "running":
             self._pause_action.setText("⏸ 暂停翻译")
-            self._tray_icon.setToolTip("Clude翻译App - 运行中")
+            self._stop_action.setVisible(True)
+            self._tray_icon.setToolTip("Clude翻译App - 翻译中")
+        else:  # paused
+            self._pause_action.setText("▶ 恢复翻译")
+            self._stop_action.setVisible(True)
+            self._tray_icon.setToolTip("Clude翻译App - 已暂停")
 
     def show_notification(self, title: str, message: str):
         """显示系统通知"""
@@ -160,10 +169,5 @@ class TrayManager(QObject):
             self._tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
 
     @property
-    def is_paused(self):
-        return self._paused
-
-    @property
     def tray_icon(self):
         return self._tray_icon
-

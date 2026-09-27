@@ -110,4 +110,4 @@ pyinstaller clude_fanyi_console.spec  # 带控制台的调试版
 python main.py   # 直接运行
 ```
 
-工作进程与设计文档见 `工作进程.md` 与 `docs/designs/`。
+
